@@ -68,18 +68,18 @@ app.post("/api/opposition-search", async (req, res) => {
     if (!query) return res.status(400).json({ error: "Query is required" });
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: `Busca exhaustivamente informaci\xF3n real, oficial y ACTUALIZADA sobre procesos selectivos, oposiciones o bolsas de empleo p\xFAblico en Espa\xF1a para el t\xE9rmino: "${query}".
-      Realiza una b\xFAsqueda espec\xEDfica en sitios web oficiales como "administracion.gob.es", BOE, y portales auton\xF3micos de empleo.
+      contents: `Busca exhaustivamente informaci\xF3n real, oficial y ACTUALIZADA sobre procesos selectivos, oposiciones o bolsas de empleo p\xFAblico EXCLUSIVAMENTE EN ESPA\xD1A (Estado, Comunidades Aut\xF3nomas o Ayuntamientos) para el t\xE9rmino: "${query}".
       REGLA ESTRICTA Y OBLIGATORIA: SOLO DEBES DEVOLVER CONVOCATORIAS QUE TENGAN EL PLAZO DE INSCRIPCI\xD3N ACTUALMENTE ABIERTO. NO DEVUELVAS NING\xDAN PROCESO CERRADO, FINALIZADO O PENDIENTE DE ABRIR.
+      EXCLUYE cualquier oposici\xF3n de instituciones europeas (EPSO) o internacionales, a menos que el usuario lo pida expresamente.
       Devuelve una lista de hasta 15 resultados que coincidan con convocatorias reales de empleo p\xFAblico con plazo abierto. NO devuelvas ofertas de empleo privado.
       Incluye detalles como el nombre oficial, plazas, grupo (A1, A2, C1, C2), \xE1mbito y estado. En "status" pon siempre "Abierto" seguido de la fecha l\xEDmite.
       Devuelve ESTRICTAMENTE en formato JSON Array sin texto adicional, donde cada objeto tenga estas claves: id, name, totalPlaces (number), group, region, status, description, url.`,
       config: {
-        tools: [{ googleSearch: {} }]
+        tools: [{ googleSearch: {} }],
+        temperature: 0.1
       }
     });
     let rawText = response.text || "[]";
-    console.log("Raw search response:", rawText);
     let cleanText = extractJSON(rawText);
     try {
       let parsed = JSON.parse(cleanText);
@@ -106,30 +106,7 @@ app.post("/api/opposition-search", async (req, res) => {
     }
   } catch (error) {
     console.error("Search API Error:", error.message);
-    res.json({
-      results: [
-        {
-          id: `mock-1`,
-          name: `Bolsa de Empleo Temporal ${req.body.query || "P\xFAblico"} (Servicio de Salud)`,
-          totalPlaces: 150,
-          group: "C1",
-          region: "Auton\xF3mico",
-          status: "Abierto hasta 15/08/2026",
-          description: "Convocatoria abierta para la provisi\xF3n temporal de plazas mediante concurso de m\xE9ritos.",
-          url: "https://administracion.gob.es/"
-        },
-        {
-          id: `mock-2`,
-          name: `Oposici\xF3n de ${req.body.query || "T\xE9cnico"} (Ministerio)`,
-          totalPlaces: 45,
-          group: "A2",
-          region: "Estatal",
-          status: "Abierto hasta 30/08/2026",
-          description: "Sistema de concurso-oposici\xF3n libre.",
-          url: "https://boe.es/"
-        }
-      ]
-    });
+    res.status(500).json({ error: error.message || "Error al realizar la b\xFAsqueda" });
   }
 });
 app.post("/api/opposition-sync", async (req, res) => {
@@ -139,11 +116,13 @@ app.post("/api/opposition-sync", async (req, res) => {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: `Genera TODO el contenido (Temario, trampas de examen, preguntas dif\xEDciles, an\xE1lisis, casos pr\xE1cticos) espec\xEDfico, detallado y real para la oposici\xF3n "${name}".
+      IMPORTANTE: Esta oposici\xF3n es de ESPA\xD1A. Basa el temario en la Constituci\xF3n Espa\xF1ola, Ley 39/2015, Ley 40/2015, TREBEP, y la normativa auton\xF3mica o local aplicable. EXCLUYE el temario de la Uni\xF3n Europea a menos que la oposici\xF3n sea expl\xEDcitamente europea.
       No inventes nombres gen\xE9ricos. Busca el temario oficial real de esta oposici\xF3n, cu\xE1les son las leyes y normativas que caen de verdad en ella, cu\xE1les son los requisitos de acceso verdaderos, cu\xE1les son las trampas comunes de ESTA oposici\xF3n espec\xEDfica y un caso pr\xE1ctico que haya podido caer en ex\xE1menes pasados de ESTA oposici\xF3n.
       IMPORTANTE: Devuelve ESTRICTAMENTE UN OBJETO JSON con las siguientes claves: syllabusBlocks, syllabusThemes, requirements, examTraps, practicalCases, analysisGlobal, difficultPatterns, officialExams.
       Para "practicalCases", cada caso debe tener "title", "scenario" (descripci\xF3n larga del supuesto de hecho), y "questions" (array de preguntas). Cada pregunta debe tener "statement", "options" (objeto con A, B, C, D), "correctOption" (A, B, C o D), "explanation" y "articleReference".`,
       config: {
-        tools: [{ googleSearch: {} }]
+        tools: [{ googleSearch: {} }],
+        temperature: 0.2
       }
     });
     let rawText = response.text || "{}";
@@ -157,54 +136,7 @@ app.post("/api/opposition-sync", async (req, res) => {
     }
   } catch (error) {
     console.error("Sync API Error:", error.message);
-    res.json({
-      syllabusBlocks: ["Bloque I: Organizaci\xF3n del Estado", "Bloque II: Derecho Administrativo General", "Bloque III: Temario Espec\xEDfico"],
-      syllabusThemes: [
-        { id: "t1", block: "Bloque I: Organizaci\xF3n del Estado", title: "La Constituci\xF3n Espa\xF1ola de 1978" },
-        { id: "t2", block: "Bloque II: Derecho Administrativo General", title: "El Acto Administrativo" },
-        { id: "t3", block: "Bloque III: Temario Espec\xEDfico", title: "Funciones y Competencias del Puesto" }
-      ],
-      requirements: [
-        "Tener la nacionalidad espa\xF1ola o de un Estado miembro de la UE.",
-        "Poseer la capacidad funcional para el desempe\xF1o de las tareas.",
-        "Estar en posesi\xF3n de la titulaci\xF3n requerida en la convocatoria.",
-        "No haber sido separado mediante expediente disciplinario del servicio de cualquiera de las Administraciones P\xFAblicas."
-      ],
-      examTraps: [
-        { title: "Plazos Administrativos", description: "Confundir d\xEDas h\xE1biles (excluyen s\xE1bados, domingos y festivos) con d\xEDas naturales (todos). La regla general en la Ley 39/2015 son d\xEDas h\xE1biles." },
-        { title: "Silencio Administrativo", description: "Asumir que el silencio siempre es positivo. En procedimientos iniciados de oficio con efectos desfavorables, produce caducidad." },
-        { title: "Mayor\xEDas Parlamentarias", description: "Confundir mayor\xEDa absoluta (mitad m\xE1s uno del n\xFAmero legal de miembros) con mayor\xEDa simple (m\xE1s votos a favor que en contra)." }
-      ],
-      practicalCases: [
-        {
-          id: "case-mock",
-          title: "Supuesto General de Actuaci\xF3n",
-          scenario: "Se le presenta en su puesto de trabajo una solicitud de acceso a un expediente que contiene datos de car\xE1cter personal de terceros. El solicitante argumenta tener un inter\xE9s leg\xEDtimo para ello, pero no aporta documentaci\xF3n justificativa en el momento.",
-          questions: [
-            {
-              statement: "\xBFCu\xE1l debe ser la actuaci\xF3n inicial respecto a la solicitud de acceso?",
-              options: {
-                A: "Denegar el acceso verbalmente de inmediato.",
-                B: "Requerir al solicitante que acredite el inter\xE9s leg\xEDtimo o el consentimiento de los afectados en un plazo de 10 d\xEDas h\xE1biles.",
-                C: "Conceder el acceso parcial tapando los nombres a mano.",
-                D: "Elevar la consulta al Ministerio competente."
-              },
-              correctOption: "B",
-              explanation: "Seg\xFAn la Ley 39/2015 y la LOPDGDD, se debe requerir la subsanaci\xF3n de la solicitud o la acreditaci\xF3n del inter\xE9s leg\xEDtimo/consentimiento, otorgando el plazo legal preceptivo.",
-              articleReference: "Art. 68 Ley 39/2015"
-            }
-          ],
-          generalGuidelines: ["Analizar la normativa procedimental.", "Verificar los requisitos de la solicitud."],
-          specificGuidelines: ["Aplicar la LOPDGDD en concurrencia con la Ley de Transparencia."]
-        }
-      ],
-      analysisGlobal: "La oposici\xF3n requiere un fuerte dominio de la Ley 39/2015 y del temario espec\xEDfico. La principal dificultad radica en los casos pr\xE1cticos que combinan normativa general con los protocolos propios del puesto.",
-      difficultPatterns: ["Preguntas negativas ('Se\xF1ale la incorrecta')", "Opciones 'Todas las anteriores son ciertas'", "Casos cruzados entre diferentes leyes"],
-      officialExams: [
-        { year: 2023, call: "OEP 2023 - Turno Libre" },
-        { year: 2022, call: "OEP 2022 - Promoci\xF3n Interna" }
-      ]
-    });
+    res.status(500).json({ error: error.message || "Error al sincronizar la oposici\xF3n" });
   }
 });
 app.post("/api/theme-content", async (req, res) => {
@@ -231,35 +163,7 @@ app.post("/api/theme-content", async (req, res) => {
     }
   } catch (error) {
     console.error("Theme Content Generation Error:", error.message);
-    res.json({
-      id: `theme-mock-${Date.now()}`,
-      title: req.body.themeTitle || "Tema Generado",
-      subtitle: `Contenido espec\xEDfico para ${req.body.oppositionName || "la oposici\xF3n"}`,
-      introduction: "Este es un resumen generado de emergencia debido a l\xEDmites de la API. En una situaci\xF3n real, aqu\xED aparecer\xEDa una introducci\xF3n detallada al tema.",
-      sections: [
-        {
-          title: "1. Conceptos Fundamentales",
-          content: "La base normativa y los principios fundamentales de este tema establecen las directrices principales de actuaci\xF3n para los empleados p\xFAblicos en este \xE1mbito."
-        },
-        {
-          title: "2. Procedimientos y Actuaci\xF3n",
-          content: "El desarrollo de las competencias asignadas requiere la observancia estricta de los plazos, garant\xEDas y procedimientos establecidos en la legislaci\xF3n aplicable."
-        }
-      ],
-      keyArticles: [
-        {
-          article: "Art. 1",
-          title: "Disposiciones Generales",
-          description: "Establece el objeto y \xE1mbito de aplicaci\xF3n.",
-          url: "https://boe.es/"
-        }
-      ],
-      studyTips: [
-        "Memoriza los plazos clave mencionados en el tema.",
-        "Relaciona los conceptos te\xF3ricos con casos pr\xE1cticos reales.",
-        "Repasa las excepciones a la norma general, ya que suelen ser objeto de pregunta de examen."
-      ]
-    });
+    res.status(500).json({ error: error.message || "Error al generar contenido del tema" });
   }
 });
 app.post("/api/generate-case", async (req, res) => {
@@ -302,48 +206,31 @@ app.post("/api/generate-case", async (req, res) => {
     res.json(JSON.parse(cleanText));
   } catch (error) {
     console.error("Case Generation Error:", error.message);
-    res.json({
-      title: `Caso Pr\xE1ctico Cl\xEDnico/T\xE9cnico: ${req.body.oppositionName}`,
-      scenario: `Usted se encuentra prestando servicio como ${req.body.oppositionName}. Durante su jornada laboral, se presenta una situaci\xF3n de emergencia o complejidad alta relacionada con el bloque de ${req.body.blockName || "conocimientos espec\xEDficos"}. Se requiere una intervenci\xF3n inmediata bas\xE1ndose en los protocolos vigentes y normativas aplicables al caso.`,
-      questions: [
-        {
-          statement: "\xBFCu\xE1l es la primera medida a adoptar seg\xFAn el protocolo oficial?",
-          options: {
-            A: "Ignorar la situaci\xF3n y esperar \xF3rdenes.",
-            B: "Evaluar la situaci\xF3n y aplicar la medida de contenci\xF3n inicial estipulada.",
-            C: "Delegar inmediatamente en un superior sin recabar datos.",
-            D: "Documentar el caso antes de intervenir."
-          },
-          correctOption: "B",
-          explanation: "La actuaci\xF3n inmediata y proporcionada es fundamental en situaciones agudas, seg\xFAn la lex artis y los protocolos del puesto.",
-          articleReference: "Protocolos de Actuaci\xF3n"
-        },
-        {
-          statement: "En relaci\xF3n a sus competencias, si un usuario exige informaci\xF3n confidencial en este escenario, \xBFqu\xE9 debe hacer?",
-          options: {
-            A: "Entregarla para calmar la situaci\xF3n.",
-            B: "Negarla verbalmente sin mayor explicaci\xF3n.",
-            C: "Informar de que la normativa de protecci\xF3n de datos impide facilitar esa informaci\xF3n sin autorizaci\xF3n.",
-            D: "Remitirle a la prensa local."
-          },
-          correctOption: "C",
-          explanation: "El deber de sigilo y confidencialidad es estricto en el \xE1mbito p\xFAblico.",
-          articleReference: "Ley Org\xE1nica 3/2018 (LOPDGDD)"
-        },
-        {
-          statement: "\xBFQu\xE9 responsabilidad podr\xEDa derivarse de una actuaci\xF3n negligente en este caso pr\xE1ctico?",
-          options: {
-            A: "Ninguna, al ser empleado p\xFAblico.",
-            B: "\xDAnicamente responsabilidad civil subsidiaria de la Administraci\xF3n.",
-            C: "Responsabilidad disciplinaria, y potencialmente civil o penal dependiendo de la gravedad.",
-            D: "Solo amonestaci\xF3n verbal."
-          },
-          correctOption: "C",
-          explanation: "Los empleados p\xFAblicos est\xE1n sujetos al r\xE9gimen disciplinario, adem\xE1s de la posible responsabilidad penal o civil por dolo o culpa grave.",
-          articleReference: "TREBEP (R\xE9gimen Disciplinario)"
-        }
-      ]
+    res.status(500).json({ error: error.message || "Error al generar el caso pr\xE1ctico" });
+  }
+});
+app.post("/api/generate-material", async (req, res) => {
+  try {
+    const { oppositionName, selectedThemes, selectedYears } = req.body;
+    if (!oppositionName) return res.status(400).json({ error: "Missing parameters" });
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: `Genera un documento completo de estudio para la oposici\xF3n "${oppositionName}".
+      Incluye el desarrollo completo de los siguientes temas: ${selectedThemes?.join(", ") || "Temario general"}.
+      Y genera un resumen exhaustivo de las preguntas y casos de los ex\xE1menes oficiales de los a\xF1os: ${selectedYears?.join(", ") || "\xDAltimos a\xF1os"}.
+      Basa TODO en normativa real y vigente en Espa\xF1a. NO inventes datos.
+      Devuelve ESTRICTAMENTE UN OBJETO JSON con las claves: "title", "introduction", "themes" (array con title y content), "exams" (array con year y questions (array con statement, options, correctOption, explanation)).`,
+      config: {
+        tools: [{ googleSearch: {} }],
+        temperature: 0.2
+      }
     });
+    let rawText = response.text || "{}";
+    let cleanText = extractJSON(rawText);
+    res.json(JSON.parse(cleanText));
+  } catch (error) {
+    console.error("Material Generation Error:", error.message);
+    res.status(500).json({ error: error.message || "Error al generar el material completo" });
   }
 });
 if (process.env.NODE_ENV !== "production") {
