@@ -1,0 +1,6 @@
+{
+  "name": "Preparador de Oposiciones - Tramitación Procesal",
+  "description": "Herramienta corporativa moderna para la preparación de la oposición de Tramitación Procesal y Administrativa, con exámenes oficiales, análisis de patrones, generador de test interactivo y control de progreso.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
