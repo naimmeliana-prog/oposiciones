@@ -302,6 +302,11 @@ export default function App() {
 
   // Interactive content modal
   const [selectedInteractiveConcept, setSelectedInteractiveConcept] = useState<{themeId: string, concept: string, type: 'concept' | 'articles'} | null>(null);
+  const [materialResult, setMaterialResult] = useState<any>(null);
+  const [isGeneratingMaterial, setIsGeneratingMaterial] = useState(false);
+  const [materialThemes, setMaterialThemes] = useState<string[]>([]);
+  const [materialYears, setMaterialYears] = useState<number[]>([]);
+
   const [viewingFullTheme, setViewingFullTheme] = useState<any | null>(null);
   const [isFetchingTheme, setIsFetchingTheme] = useState(false);
 
@@ -324,24 +329,51 @@ export default function App() {
       try {
         data = JSON.parse(text);
       } catch(e) {
-        throw new Error("Invalid response: " + text.substring(0, 100));
+        throw new Error("Respuesta inválida del servidor");
       }
       // Handle potentially wrapped AI responses
       if (data && !data.error && !data.sections && data.tema) data = data.tema;
       if (data && !data.error && !data.sections && data.content) data = data.content;
       if (data.error) {
-        alert("Aviso: " + (data.error.includes("RESOURCE_EXHAUSTED") || data.error.includes("JSON") ? "Límite de uso de la IA de Google alcanzado. Se mostrará un tema por defecto. Inténtalo de nuevo más tarde." : data.error));
-        setViewingFullTheme(getThemeFullContent(themeId, title || "Tema de Estudio", activeOpposition.id, activeOpposition.name));
-        return;
+        throw new Error(data.error);
       }
+
       data.id = themeId;
       setViewingFullTheme(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      // Fallback
-      setViewingFullTheme(getThemeFullContent(themeId, title || "Tema de Estudio", activeOpposition.id, activeOpposition.name));
+      alert("Error al obtener el contenido del tema: " + err.message);
     } finally {
       setIsFetchingTheme(false);
+    }
+  };
+
+  const generateMaterial = async () => {
+    setIsGeneratingMaterial(true);
+    try {
+      const response = await fetch("/api/generate-material", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          oppositionName: activeOpposition.name,
+          selectedThemes: materialThemes,
+          selectedYears: materialYears
+        })
+      });
+      const text = await response.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        throw new Error("Respuesta inválida del servidor");
+      }
+      if (data.error) throw new Error(data.error);
+      setMaterialResult(data);
+    } catch (err: any) {
+      console.error(err);
+      alert("Error al generar el material completo: " + err.message);
+    } finally {
+      setIsGeneratingMaterial(false);
     }
   };
 
@@ -411,16 +443,17 @@ export default function App() {
       try {
         data = JSON.parse(text);
       } catch(e) {
-        throw new Error("Invalid response: " + text.substring(0, 100));
+        console.error("Invalid response from server:", text.substring(0, 100));
+        throw new Error("Respuesta inválida del servidor");
       }
       if (data.results) {
         setExternalSearchRes(data.results);
       } else if (data.error) {
-        alert("Aviso: " + (data.error.includes("RESOURCE_EXHAUSTED") || data.error.includes("JSON") ? "Se ha alcanzado el límite de uso de la IA de Google. Inténtalo de nuevo en unos minutos." : "No se pudo realizar la búsqueda en vivo."));
+        throw new Error(data.error);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Search failed", err);
-      alert("Aviso: Error de conexión con el servicio de búsqueda.");
+      alert("Aviso: " + err.message);
     } finally {
       setIsSearchingExternal(false);
     }
@@ -2813,6 +2846,14 @@ export default function App() {
             2. Histórico
           </button>
           <button
+            onClick={() => setActiveTab("material")}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+              activeTab === "material" ? "bg-slate-900 text-white" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            📚 Material Completo
+          </button>
+          <button
             onClick={() => setActiveTab("analisis")}
             className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
               activeTab === "analisis" ? "bg-slate-900 text-white" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
@@ -2959,6 +3000,19 @@ export default function App() {
                 <span className="text-[9px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded">
                   {officialExams.length}
                 </span>
+              </button>
+              <button
+                onClick={() => setActiveTab("material")}
+                className={`w-full flex items-center justify-between p-2 rounded-lg text-left text-xs font-medium transition cursor-pointer ${
+                  activeTab === "material"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <BookOpen className="h-3.5 w-3.5" />
+                  <span>📚 Material Completo</span>
+                </div>
               </button>
 
               <button
@@ -4788,7 +4842,109 @@ export default function App() {
           {/* ---------------------------------- */}
           {/* TAB 3: ANÁLISIS GLOBAL DE EXÁMENES */}
           {/* ---------------------------------- */}
-          {activeTab === "analisis" && (
+          
+          {activeTab === "material" && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col gap-6">
+              <div className="border-b border-slate-200 pb-4">
+                <span className="tag text-xs text-indigo-600 font-bold tracking-widest uppercase">
+                  Material Completo
+                </span>
+                <h2 className="text-xl font-bold text-slate-800 mt-1">Generador de Documento Exhaustivo</h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Genera y visualiza un documento completo con todos los temarios seleccionados y exámenes oficiales resueltos.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-4">
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <label className="block text-xs font-bold text-slate-700 mb-2">Selecciona Temas a Incluir</label>
+                    <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-2 border border-slate-200 rounded-lg">
+                      {currentSyllabus?.themes?.map(theme => (
+                        <label key={theme.id} className="flex items-center gap-2 text-xs">
+                          <input 
+                            type="checkbox" 
+                            checked={materialThemes.includes(theme.title)}
+                            onChange={(e) => {
+                              if (e.target.checked) setMaterialThemes([...materialThemes, theme.title]);
+                              else setMaterialThemes(materialThemes.filter(t => t !== theme.title));
+                            }}
+                          />
+                          {theme.id} - {theme.title}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="flex-1">
+                    <label className="block text-xs font-bold text-slate-700 mb-2">Selecciona Años de Exámenes</label>
+                    <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-2 border border-slate-200 rounded-lg">
+                      {officialExams?.map(exam => (
+                        <label key={exam.id} className="flex items-center gap-2 text-xs">
+                          <input 
+                            type="checkbox" 
+                            checked={materialYears.includes(exam.year)}
+                            onChange={(e) => {
+                              if (e.target.checked) setMaterialYears([...materialYears, exam.year]);
+                              else setMaterialYears(materialYears.filter(y => y !== exam.year));
+                            }}
+                          />
+                          {exam.year}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={generateMaterial}
+                  disabled={isGeneratingMaterial || (materialThemes.length === 0 && materialYears.length === 0)}
+                  className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold py-3 px-4 rounded-xl text-sm transition cursor-pointer self-start"
+                >
+                  {isGeneratingMaterial ? "Generando documento extenso (esto puede tardar)..." : "Generar Material Completo"}
+                </button>
+              </div>
+
+              {materialResult && (
+                <div className="mt-8 border-t border-slate-200 pt-8">
+                  <h1 className="text-3xl font-black text-slate-900 text-center mb-4">{materialResult.title}</h1>
+                  <p className="text-sm text-slate-600 mb-8 italic text-center max-w-2xl mx-auto">{materialResult.introduction}</p>
+                  
+                  {materialResult.themes && materialResult.themes.map((theme: any, idx: number) => (
+                    <div key={idx} className="mb-12">
+                      <h2 className="text-2xl font-bold text-slate-800 mb-4 border-b pb-2">{theme.title}</h2>
+                      <div className="prose prose-sm max-w-none text-slate-700" dangerouslySetInnerHTML={{ __html: theme.content?.replace(/\n/g, '<br/>') || '' }} />
+                    </div>
+                  ))}
+
+                  {materialResult.exams && materialResult.exams.map((exam: any, idx: number) => (
+                    <div key={idx} className="mb-12 bg-slate-50 p-6 rounded-xl border border-slate-200">
+                      <h2 className="text-xl font-bold text-slate-800 mb-4 border-b border-slate-300 pb-2">Examen Oficial - Año {exam.year}</h2>
+                      <div className="flex flex-col gap-6">
+                        {exam.questions?.map((q: any, qIdx: number) => (
+                          <div key={qIdx} className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+                            <p className="font-bold text-slate-800 mb-3">{qIdx + 1}. {q.statement}</p>
+                            <div className="flex flex-col gap-2 pl-4">
+                              {Object.entries(q.options || {}).map(([key, val]) => (
+                                <div key={key} className={`text-sm ${key === q.correctOption ? 'font-bold text-emerald-700 bg-emerald-50 p-1 rounded' : 'text-slate-600'}`}>
+                                  {key}) {val as string}
+                                </div>
+                              ))}
+                            </div>
+                            <div className="mt-4 text-xs text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                              <strong>Explicación:</strong> {q.explanation}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+{activeTab === "analisis" && (
             <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col gap-6">
               
               <div className="border-b border-slate-200 pb-4">
