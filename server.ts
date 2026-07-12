@@ -133,9 +133,10 @@ app.post("/api/opposition-sync", async (req, res) => {
     const { name } = req.body;
     if (!name) return res.status(400).json({ error: "Name is required" });
 
-    const rawText = await callOpenRouter(`Genera TODO el contenido (Temario, trampas de examen, preguntas difíciles, análisis, casos prácticos) específico, detallado y real para la oposición "${name}".
-      IMPORTANTE: Esta oposición es de ESPAÑA. Basa el temario en la Constitución Española, Ley 39/2015, Ley 40/2015, TREBEP, y la normativa autonómica o local aplicable. EXCLUYE el temario de la Unión Europea a menos que la oposición sea explícitamente europea.
-      No inventes nombres genéricos. Busca el temario oficial real de esta oposición, cuáles son las leyes y normativas que caen de verdad en ella, cuáles son los requisitos de acceso verdaderos, cuáles son las trampas comunes de ESTA oposición específica y un caso práctico que haya podido caer en exámenes pasados de ESTA oposición.
+    const rawText = await callOpenRouter(`Genera el esquema general (Temario, trampas de examen, preguntas difíciles, análisis, casos prácticos) específico y real para la oposición "${name}".
+      IMPORTANTE: Esta oposición es de ESPAÑA. Basa el temario en la normativa correspondiente (Constitución, leyes administrativas, leyes específicas de su ámbito, etc.).
+      No inventes nombres genéricos. Busca el temario oficial real de esta profesión. Por ejemplo, si es Sanidad, usa leyes y protocolos sanitarios. Si es Justicia (ej. Tramitación Procesal), usa Ley de Enjuiciamiento Civil, Penal, etc.
+      CRÍTICO: Para evitar cortes por límite de palabras, SÉ CONCISO. Limita "syllabusBlocks" a máximo 5 bloques, "syllabusThemes" a máximo 10 temas esenciales, y "practicalCases" a 1 solo caso práctico.
       IMPORTANTE: Devuelve ESTRICTAMENTE UN OBJETO JSON con las siguientes claves: syllabusBlocks, syllabusThemes, requirements, examTraps, practicalCases, analysisGlobal, difficultPatterns, officialExams.
       Para "practicalCases", cada caso debe tener "title", "scenario" (descripción larga del supuesto de hecho), y "questions" (array de preguntas). Cada pregunta debe tener "statement", "options" (objeto con A, B, C, D), "correctOption" (A, B, C o D), "explanation" y "articleReference".`);
     
@@ -159,8 +160,9 @@ app.post("/api/theme-content", async (req, res) => {
   try {
     const { themeTitle, oppositionName } = req.body;
     if (!themeTitle || !oppositionName) return res.status(400).json({ error: "Missing parameters" });
-    const rawText = await callOpenRouter(`Genera el contenido de estudio real, detallado y veraz para el tema "${themeTitle}" correspondiente a la oposición "${oppositionName}". 
-      No uses texto de relleno. Incluye referencias reales a las leyes o artículos correspondientes.
+    const rawText = await callOpenRouter(`Genera el contenido de estudio real y veraz para el tema "${themeTitle}" correspondiente a la oposición "${oppositionName}". 
+      Incluye referencias reales a las leyes o artículos correspondientes.
+      CRÍTICO: Para evitar exceder el límite de palabras, SÉ EXTREMADAMENTE CONCISO. Resume el contenido en un máximo de 3 a 5 secciones breves.
       Devuelve ESTRICTAMENTE UN OBJETO JSON con las siguientes claves: id, title, subtitle, introduction, sections (array de objetos con title y content), keyArticles (array de objetos con article, title, description, url) y studyTips.`);
     
     console.log("Raw content response:", rawText);
@@ -224,9 +226,10 @@ app.post("/api/generate-material", async (req, res) => {
     if (!oppositionName) return res.status(400).json({ error: "Missing parameters" });
 
     const rawText = await callOpenRouter(`Genera un documento completo de estudio para la oposición "${oppositionName}".
-      Incluye el desarrollo completo de los siguientes temas: ${selectedThemes?.join(", ") || "Temario general"}.
-      Y genera un resumen exhaustivo de las preguntas y casos de los exámenes oficiales de los años: ${selectedYears?.join(", ") || "Últimos años"}.
+      Incluye el desarrollo de los siguientes temas: ${selectedThemes?.join(", ") || "Temario general"}.
+      Y genera un resumen de las preguntas de los exámenes oficiales de los años: ${selectedYears?.join(", ") || "Últimos años"}.
       Basa TODO en normativa real y vigente en España. NO inventes datos.
+      CRÍTICO: Para evitar cortes por límite de longitud (token limit), MÁXIMO desarrolla 2 temas resumidos y MÁXIMO pon 5 preguntas de examen. Sé extremadamente directo y conciso en los textos.
       Devuelve ESTRICTAMENTE UN OBJETO JSON con las claves: "title", "introduction", "themes" (array con title y content), "exams" (array con year y questions (array con statement, options, correctOption, explanation)).`);
     
     let cleanText = extractJSON(rawText);
