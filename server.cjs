@@ -135,9 +135,10 @@ app.post("/api/opposition-sync", async (req, res) => {
   try {
     const { name } = req.body;
     if (!name) return res.status(400).json({ error: "Name is required" });
-    const rawText = await callOpenRouter(`Genera TODO el contenido (Temario, trampas de examen, preguntas dif\xEDciles, an\xE1lisis, casos pr\xE1cticos) espec\xEDfico, detallado y real para la oposici\xF3n "${name}".
-      IMPORTANTE: Esta oposici\xF3n es de ESPA\xD1A. Basa el temario en la Constituci\xF3n Espa\xF1ola, Ley 39/2015, Ley 40/2015, TREBEP, y la normativa auton\xF3mica o local aplicable. EXCLUYE el temario de la Uni\xF3n Europea a menos que la oposici\xF3n sea expl\xEDcitamente europea.
-      No inventes nombres gen\xE9ricos. Busca el temario oficial real de esta oposici\xF3n, cu\xE1les son las leyes y normativas que caen de verdad en ella, cu\xE1les son los requisitos de acceso verdaderos, cu\xE1les son las trampas comunes de ESTA oposici\xF3n espec\xEDfica y un caso pr\xE1ctico que haya podido caer en ex\xE1menes pasados de ESTA oposici\xF3n.
+    const rawText = await callOpenRouter(`Genera el esquema general (Temario, trampas de examen, preguntas dif\xEDciles, an\xE1lisis, casos pr\xE1cticos) espec\xEDfico y real para la oposici\xF3n "${name}".
+      IMPORTANTE: Esta oposici\xF3n es de ESPA\xD1A. Basa el temario en la normativa correspondiente (Constituci\xF3n, leyes administrativas, leyes espec\xEDficas de su \xE1mbito, etc.).
+      No inventes nombres gen\xE9ricos. Busca el temario oficial real de esta profesi\xF3n. Por ejemplo, si es Sanidad, usa leyes y protocolos sanitarios. Si es Justicia (ej. Tramitaci\xF3n Procesal), usa Ley de Enjuiciamiento Civil, Penal, etc.
+      CR\xCDTICO: Para evitar cortes por l\xEDmite de palabras, S\xC9 CONCISO. Limita "syllabusBlocks" a m\xE1ximo 5 bloques, "syllabusThemes" a m\xE1ximo 10 temas esenciales, y "practicalCases" a 1 solo caso pr\xE1ctico.
       IMPORTANTE: Devuelve ESTRICTAMENTE UN OBJETO JSON con las siguientes claves: syllabusBlocks, syllabusThemes, requirements, examTraps, practicalCases, analysisGlobal, difficultPatterns, officialExams.
       Para "practicalCases", cada caso debe tener "title", "scenario" (descripci\xF3n larga del supuesto de hecho), y "questions" (array de preguntas). Cada pregunta debe tener "statement", "options" (objeto con A, B, C, D), "correctOption" (A, B, C o D), "explanation" y "articleReference".`);
     console.log("Raw content response:", rawText);
@@ -157,8 +158,9 @@ app.post("/api/theme-content", async (req, res) => {
   try {
     const { themeTitle, oppositionName } = req.body;
     if (!themeTitle || !oppositionName) return res.status(400).json({ error: "Missing parameters" });
-    const rawText = await callOpenRouter(`Genera el contenido de estudio real, detallado y veraz para el tema "${themeTitle}" correspondiente a la oposici\xF3n "${oppositionName}". 
-      No uses texto de relleno. Incluye referencias reales a las leyes o art\xEDculos correspondientes.
+    const rawText = await callOpenRouter(`Genera el contenido de estudio real y veraz para el tema "${themeTitle}" correspondiente a la oposici\xF3n "${oppositionName}". 
+      Incluye referencias reales a las leyes o art\xEDculos correspondientes.
+      CR\xCDTICO: Para evitar exceder el l\xEDmite de palabras, S\xC9 EXTREMADAMENTE CONCISO. Resume el contenido en un m\xE1ximo de 3 a 5 secciones breves.
       Devuelve ESTRICTAMENTE UN OBJETO JSON con las siguientes claves: id, title, subtitle, introduction, sections (array de objetos con title y content), keyArticles (array de objetos con article, title, description, url) y studyTips.`);
     console.log("Raw content response:", rawText);
     let cleanText = extractJSON(rawText);
@@ -216,9 +218,10 @@ app.post("/api/generate-material", async (req, res) => {
     const { oppositionName, selectedThemes, selectedYears } = req.body;
     if (!oppositionName) return res.status(400).json({ error: "Missing parameters" });
     const rawText = await callOpenRouter(`Genera un documento completo de estudio para la oposici\xF3n "${oppositionName}".
-      Incluye el desarrollo completo de los siguientes temas: ${selectedThemes?.join(", ") || "Temario general"}.
-      Y genera un resumen exhaustivo de las preguntas y casos de los ex\xE1menes oficiales de los a\xF1os: ${selectedYears?.join(", ") || "\xDAltimos a\xF1os"}.
+      Incluye el desarrollo de los siguientes temas: ${selectedThemes?.join(", ") || "Temario general"}.
+      Y genera un resumen de las preguntas de los ex\xE1menes oficiales de los a\xF1os: ${selectedYears?.join(", ") || "\xDAltimos a\xF1os"}.
       Basa TODO en normativa real y vigente en Espa\xF1a. NO inventes datos.
+      CR\xCDTICO: Para evitar cortes por l\xEDmite de longitud (token limit), M\xC1XIMO desarrolla 2 temas resumidos y M\xC1XIMO pon 5 preguntas de examen. S\xE9 extremadamente directo y conciso en los textos.
       Devuelve ESTRICTAMENTE UN OBJETO JSON con las claves: "title", "introduction", "themes" (array con title y content), "exams" (array con year y questions (array con statement, options, correctOption, explanation)).`);
     let cleanText = extractJSON(rawText);
     res.json(JSON.parse(cleanText));
