@@ -26,6 +26,7 @@ var import_express = __toESM(require("express"), 1);
 var import_path = __toESM(require("path"), 1);
 var import_vite = require("vite");
 var import_dotenv = __toESM(require("dotenv"), 1);
+var import_genai = require("@google/genai");
 function extractJSON(text) {
   let firstBrace = text.indexOf("{");
   let firstBracket = text.indexOf("[");
@@ -57,36 +58,19 @@ function getFriendlyErrorMessage(error) {
   }
   return msg;
 }
-async function callOpenRouter(prompt, jsonMode = true) {
-  if (!process.env.OPENROUTER_API_KEY) {
-    throw new Error("OPENROUTER_API_KEY is not defined");
+async function callGemini(prompt, jsonMode = true) {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is not defined");
   }
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://ai.studio/build",
-      "X-Title": "Preparador de Oposiciones"
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      max_tokens: 8192,
-      messages: [{ role: "user", content: prompt }],
-      response_format: jsonMode ? { type: "json_object" } : void 0
-    })
+  const ai = new import_genai.GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: prompt,
+    config: {
+      responseMimeType: jsonMode ? "application/json" : "text/plain"
+    }
   });
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`OpenRouter API error (${response.status}):`, errorText);
-    throw new Error(`OpenRouter API error: ${response.status} - ${response.statusText}`);
-  }
-  const data = await response.json();
-  if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-    console.error("Unexpected OpenRouter response structure:", JSON.stringify(data));
-    throw new Error("Invalid response structure from OpenRouter");
-  }
-  return data.choices[0].message.content;
+  return response.text;
 }
 import_dotenv.default.config();
 var app = (0, import_express.default)();
@@ -96,10 +80,10 @@ app.post("/api/opposition-search", async (req, res) => {
   try {
     const { query } = req.body;
     if (!query) return res.status(400).json({ error: "Query is required" });
-    const rawText = await callOpenRouter(`Busca exhaustivamente informaci\xF3n real, oficial y ACTUALIZADA sobre procesos selectivos, oposiciones o bolsas de empleo p\xFAblico EXCLUSIVAMENTE EN ESPA\xD1A (Estado, Comunidades Aut\xF3nomas o Ayuntamientos) para el t\xE9rmino: "${query}".
+    const rawText = await callGemini(`Busca exhaustivamente informaci\xF3n real, oficial y ACTUALIZADA sobre procesos selectivos, oposiciones o bolsas de empleo p\xFAblico EXCLUSIVAMENTE EN ESPA\xD1A (Estado, Comunidades Aut\xF3nomas o Ayuntamientos) para el t\xE9rmino: "${query}".
       REGLA ESTRICTA Y OBLIGATORIA: SOLO DEBES DEVOLVER CONVOCATORIAS QUE TENGAN EL PLAZO DE INSCRIPCI\xD3N ACTUALMENTE ABIERTO. NO DEVUELVAS NING\xDAN PROCESO CERRADO, FINALIZADO O PENDIENTE DE ABRIR.
       EXCLUYE cualquier oposici\xF3n de instituciones europeas (EPSO) o internacionales, a menos que el usuario lo pida expresamente.
-      Devuelve una lista de hasta 15 resultados que coincidan con convocatorias reales de empleo p\xFAblico con plazo abierto. NO devuelvas ofertas de empleo privado.
+      Devuelve una lista de hasta 5 resultados que coincidan con convocatorias reales de empleo p\xFAblico con plazo abierto. NO devuelvas ofertas de empleo privado.
       Incluye detalles como el nombre oficial, plazas, grupo (A1, A2, C1, C2), \xE1mbito y estado. En "status" pon siempre "Abierto" seguido de la fecha l\xEDmite.
       Devuelve ESTRICTAMENTE en formato JSON Array sin texto adicional, donde cada objeto tenga estas claves: id, name, totalPlaces (number), group, region, status, description, url.`);
     let cleanText = extractJSON(rawText);
@@ -135,9 +119,9 @@ app.post("/api/opposition-sync", async (req, res) => {
   try {
     const { name } = req.body;
     if (!name) return res.status(400).json({ error: "Name is required" });
-    const rawText = await callOpenRouter(`Genera el esquema general (Temario, trampas de examen, preguntas dif\xEDciles, an\xE1lisis, casos pr\xE1cticos) espec\xEDfico y real para la oposici\xF3n "${name}".
+    const rawText = await callGemini(`Genera el esquema general (Temario, trampas de examen, preguntas dif\xEDciles, an\xE1lisis, casos pr\xE1cticos) espec\xEDfico y real para la oposici\xF3n "${name}".
       IMPORTANTE: Esta oposici\xF3n es de ESPA\xD1A. Basa el temario en la normativa correspondiente (Constituci\xF3n, leyes administrativas, leyes espec\xEDficas de su \xE1mbito, etc.).
-      No inventes nombres gen\xE9ricos. Busca el temario oficial real de esta profesi\xF3n. Por ejemplo, si es Sanidad, usa leyes y protocolos sanitarios. Si es Justicia (ej. Tramitaci\xF3n Procesal), usa Ley de Enjuiciamiento Civil, Penal, etc.
+      No inventes nombres gen\xE9ricos. Busca el temario oficial real de esta profesi\xF3n. \xA1NO HABLES DE MEDICINA NI SANIDAD A MENOS QUE LA OPOSICI\xD3N SEA ESPEC\xCDFICAMENTE DE SANIDAD! Usa las leyes propias del puesto.
       CR\xCDTICO: Para evitar cortes por l\xEDmite de palabras, S\xC9 CONCISO. Limita "syllabusBlocks" a m\xE1ximo 5 bloques, "syllabusThemes" a m\xE1ximo 10 temas esenciales, y "practicalCases" a 1 solo caso pr\xE1ctico.
       IMPORTANTE: Devuelve ESTRICTAMENTE UN OBJETO JSON con las siguientes claves: syllabusBlocks, syllabusThemes, requirements, examTraps, practicalCases, analysisGlobal, difficultPatterns, officialExams.
       Para "practicalCases", cada caso debe tener "title", "scenario" (descripci\xF3n larga del supuesto de hecho), y "questions" (array de preguntas). Cada pregunta debe tener "statement", "options" (objeto con A, B, C, D), "correctOption" (A, B, C o D), "explanation" y "articleReference".`);
@@ -158,7 +142,7 @@ app.post("/api/theme-content", async (req, res) => {
   try {
     const { themeTitle, oppositionName } = req.body;
     if (!themeTitle || !oppositionName) return res.status(400).json({ error: "Missing parameters" });
-    const rawText = await callOpenRouter(`Genera el contenido de estudio real y veraz para el tema "${themeTitle}" correspondiente a la oposici\xF3n "${oppositionName}". 
+    const rawText = await callGemini(`Genera el contenido de estudio real y veraz para el tema "${themeTitle}" correspondiente a la oposici\xF3n "${oppositionName}". 
       Incluye referencias reales a las leyes o art\xEDculos correspondientes.
       CR\xCDTICO: Para evitar exceder el l\xEDmite de palabras, S\xC9 EXTREMADAMENTE CONCISO. Resume el contenido en un m\xE1ximo de 3 a 5 secciones breves.
       Devuelve ESTRICTAMENTE UN OBJETO JSON con las siguientes claves: id, title, subtitle, introduction, sections (array de objetos con title y content), keyArticles (array de objetos con article, title, description, url) y studyTips.`);
@@ -179,7 +163,7 @@ app.post("/api/generate-case", async (req, res) => {
   try {
     const { oppositionName, blockName } = req.body;
     if (!oppositionName) return res.status(400).json({ error: "Opposition name is required" });
-    const rawText = await callOpenRouter(`Eres un preparador experto de oposiciones y tribunal calificador. Tu tarea es redactar un SUPUESTO PR\xC1CTICO (Caso Pr\xE1ctico) ALTAMENTE ESPECIALIZADO y REALISTA para la oposici\xF3n de: "${oppositionName}".
+    const rawText = await callGemini(`Eres un preparador experto de oposiciones y tribunal calificador. Tu tarea es redactar un SUPUESTO PR\xC1CTICO (Caso Pr\xE1ctico) ALTAMENTE ESPECIALIZADO y REALISTA para la oposici\xF3n de: "${oppositionName}".
 
       REGLA CR\xCDTICA DE ROL Y CONTEXTO:
       - Si "${oppositionName}" es del \xE1mbito SANITARIO (ej. M\xE9dico, Enfermer\xEDa, Celador), el escenario DEBE desarrollarse obligatoriamente en un Centro de Salud, Hospital o entorno asistencial. Debe involucrar pacientes, protocolos sanitarios, historias cl\xEDnicas, traslados de pacientes o triaje cl\xEDnico. \xA1PROHIBIDO mencionar juzgados, letrados, tr\xE1mites procesales o demandas civiles!
@@ -217,7 +201,7 @@ app.post("/api/generate-material", async (req, res) => {
   try {
     const { oppositionName, selectedThemes, selectedYears } = req.body;
     if (!oppositionName) return res.status(400).json({ error: "Missing parameters" });
-    const rawText = await callOpenRouter(`Genera un documento completo de estudio para la oposici\xF3n "${oppositionName}".
+    const rawText = await callGemini(`Genera un documento completo de estudio para la oposici\xF3n "${oppositionName}".
       Incluye el desarrollo de los siguientes temas: ${selectedThemes?.join(", ") || "Temario general"}.
       Y genera un resumen de las preguntas de los ex\xE1menes oficiales de los a\xF1os: ${selectedYears?.join(", ") || "\xDAltimos a\xF1os"}.
       Basa TODO en normativa real y vigente en Espa\xF1a. NO inventes datos.
