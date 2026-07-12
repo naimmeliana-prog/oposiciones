@@ -1,4 +1,3 @@
-
 function extractJSON(text) {
   let firstBrace = text.indexOf('{');
   let firstBracket = text.indexOf('[');
@@ -37,6 +36,10 @@ function getFriendlyErrorMessage(error: any): string {
 }
 
 async function callOpenRouter(prompt: string, jsonMode = true): Promise<string> {
+  if (!process.env.OPENROUTER_API_KEY) {
+    throw new Error("OPENROUTER_API_KEY is not defined");
+  }
+
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -53,10 +56,16 @@ async function callOpenRouter(prompt: string, jsonMode = true): Promise<string> 
   });
 
   if (!response.ok) {
-    throw new Error(`OpenRouter API error: ${response.statusText}`);
+    const errorText = await response.text();
+    console.error(`OpenRouter API error (${response.status}):`, errorText);
+    throw new Error(`OpenRouter API error: ${response.status} - ${response.statusText}`);
   }
 
   const data = await response.json();
+  if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+    console.error("Unexpected OpenRouter response structure:", JSON.stringify(data));
+    throw new Error("Invalid response structure from OpenRouter");
+  }
   return data.choices[0].message.content;
 }
 
@@ -247,4 +256,3 @@ if (process.env.NODE_ENV !== "production") {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }
-
