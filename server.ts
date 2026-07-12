@@ -35,40 +35,24 @@ function getFriendlyErrorMessage(error: any): string {
   return msg;
 }
 
-async function callOpenRouter(prompt: string, jsonMode = true): Promise<string> {
-  if (!process.env.OPENROUTER_API_KEY) {
-    throw new Error("OPENROUTER_API_KEY is not defined");
-  }
+import { GoogleGenAI } from "@google/genai";
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://ai.studio/build",
-      "X-Title": "Preparador de Oposiciones",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      max_tokens: 8192,
-      messages: [{ role: "user", content: prompt }],
-      response_format: jsonMode ? { type: "json_object" } : undefined,
-    }),
+async function callGemini(prompt: string, jsonMode = true): Promise<string> {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is not defined");
+  }
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: prompt,
+    config: {
+      responseMimeType: jsonMode ? "application/json" : "text/plain",
+    }
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`OpenRouter API error (${response.status}):`, errorText);
-    throw new Error(`OpenRouter API error: ${response.status} - ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-    console.error("Unexpected OpenRouter response structure:", JSON.stringify(data));
-    throw new Error("Invalid response structure from OpenRouter");
-  }
-  return data.choices[0].message.content;
+  return response.text;
 }
+
 
 dotenv.config();
 
@@ -84,10 +68,10 @@ app.post("/api/opposition-search", async (req, res) => {
     const { query } = req.body;
     if (!query) return res.status(400).json({ error: "Query is required" });
 
-    const rawText = await callOpenRouter(`Busca exhaustivamente información real, oficial y ACTUALIZADA sobre procesos selectivos, oposiciones o bolsas de empleo público EXCLUSIVAMENTE EN ESPAÑA (Estado, Comunidades Autónomas o Ayuntamientos) para el término: "${query}".
+    const rawText = await callGemini(`Busca exhaustivamente información real, oficial y ACTUALIZADA sobre procesos selectivos, oposiciones o bolsas de empleo público EXCLUSIVAMENTE EN ESPAÑA (Estado, Comunidades Autónomas o Ayuntamientos) para el término: "${query}".
       REGLA ESTRICTA Y OBLIGATORIA: SOLO DEBES DEVOLVER CONVOCATORIAS QUE TENGAN EL PLAZO DE INSCRIPCIÓN ACTUALMENTE ABIERTO. NO DEVUELVAS NINGÚN PROCESO CERRADO, FINALIZADO O PENDIENTE DE ABRIR.
       EXCLUYE cualquier oposición de instituciones europeas (EPSO) o internacionales, a menos que el usuario lo pida expresamente.
-      Devuelve una lista de hasta 15 resultados que coincidan con convocatorias reales de empleo público con plazo abierto. NO devuelvas ofertas de empleo privado.
+      Devuelve una lista de hasta 5 resultados que coincidan con convocatorias reales de empleo público con plazo abierto. NO devuelvas ofertas de empleo privado.
       Incluye detalles como el nombre oficial, plazas, grupo (A1, A2, C1, C2), ámbito y estado. En "status" pon siempre "Abierto" seguido de la fecha límite.
       Devuelve ESTRICTAMENTE en formato JSON Array sin texto adicional, donde cada objeto tenga estas claves: id, name, totalPlaces (number), group, region, status, description, url.`);
     
@@ -133,9 +117,9 @@ app.post("/api/opposition-sync", async (req, res) => {
     const { name } = req.body;
     if (!name) return res.status(400).json({ error: "Name is required" });
 
-    const rawText = await callOpenRouter(`Genera el esquema general (Temario, trampas de examen, preguntas difíciles, análisis, casos prácticos) específico y real para la oposición "${name}".
+    const rawText = await callGemini(`Genera el esquema general (Temario, trampas de examen, preguntas difíciles, análisis, casos prácticos) específico y real para la oposición "${name}".
       IMPORTANTE: Esta oposición es de ESPAÑA. Basa el temario en la normativa correspondiente (Constitución, leyes administrativas, leyes específicas de su ámbito, etc.).
-      No inventes nombres genéricos. Busca el temario oficial real de esta profesión. Por ejemplo, si es Sanidad, usa leyes y protocolos sanitarios. Si es Justicia (ej. Tramitación Procesal), usa Ley de Enjuiciamiento Civil, Penal, etc.
+      No inventes nombres genéricos. Busca el temario oficial real de esta profesión. ¡NO HABLES DE MEDICINA NI SANIDAD A MENOS QUE LA OPOSICIÓN SEA ESPECÍFICAMENTE DE SANIDAD! Usa las leyes propias del puesto.
       CRÍTICO: Para evitar cortes por límite de palabras, SÉ CONCISO. Limita "syllabusBlocks" a máximo 5 bloques, "syllabusThemes" a máximo 10 temas esenciales, y "practicalCases" a 1 solo caso práctico.
       IMPORTANTE: Devuelve ESTRICTAMENTE UN OBJETO JSON con las siguientes claves: syllabusBlocks, syllabusThemes, requirements, examTraps, practicalCases, analysisGlobal, difficultPatterns, officialExams.
       Para "practicalCases", cada caso debe tener "title", "scenario" (descripción larga del supuesto de hecho), y "questions" (array de preguntas). Cada pregunta debe tener "statement", "options" (objeto con A, B, C, D), "correctOption" (A, B, C o D), "explanation" y "articleReference".`);
@@ -160,7 +144,7 @@ app.post("/api/theme-content", async (req, res) => {
   try {
     const { themeTitle, oppositionName } = req.body;
     if (!themeTitle || !oppositionName) return res.status(400).json({ error: "Missing parameters" });
-    const rawText = await callOpenRouter(`Genera el contenido de estudio real y veraz para el tema "${themeTitle}" correspondiente a la oposición "${oppositionName}". 
+    const rawText = await callGemini(`Genera el contenido de estudio real y veraz para el tema "${themeTitle}" correspondiente a la oposición "${oppositionName}". 
       Incluye referencias reales a las leyes o artículos correspondientes.
       CRÍTICO: Para evitar exceder el límite de palabras, SÉ EXTREMADAMENTE CONCISO. Resume el contenido en un máximo de 3 a 5 secciones breves.
       Devuelve ESTRICTAMENTE UN OBJETO JSON con las siguientes claves: id, title, subtitle, introduction, sections (array de objetos con title y content), keyArticles (array de objetos con article, title, description, url) y studyTips.`);
@@ -184,7 +168,7 @@ app.post("/api/generate-case", async (req, res) => {
   try {
     const { oppositionName, blockName } = req.body;
     if (!oppositionName) return res.status(400).json({ error: "Opposition name is required" });
-    const rawText = await callOpenRouter(`Eres un preparador experto de oposiciones y tribunal calificador. Tu tarea es redactar un SUPUESTO PRÁCTICO (Caso Práctico) ALTAMENTE ESPECIALIZADO y REALISTA para la oposición de: "${oppositionName}".
+    const rawText = await callGemini(`Eres un preparador experto de oposiciones y tribunal calificador. Tu tarea es redactar un SUPUESTO PRÁCTICO (Caso Práctico) ALTAMENTE ESPECIALIZADO y REALISTA para la oposición de: "${oppositionName}".
 
       REGLA CRÍTICA DE ROL Y CONTEXTO:
       - Si "${oppositionName}" es del ámbito SANITARIO (ej. Médico, Enfermería, Celador), el escenario DEBE desarrollarse obligatoriamente en un Centro de Salud, Hospital o entorno asistencial. Debe involucrar pacientes, protocolos sanitarios, historias clínicas, traslados de pacientes o triaje clínico. ¡PROHIBIDO mencionar juzgados, letrados, trámites procesales o demandas civiles!
@@ -225,7 +209,7 @@ app.post("/api/generate-material", async (req, res) => {
     const { oppositionName, selectedThemes, selectedYears } = req.body;
     if (!oppositionName) return res.status(400).json({ error: "Missing parameters" });
 
-    const rawText = await callOpenRouter(`Genera un documento completo de estudio para la oposición "${oppositionName}".
+    const rawText = await callGemini(`Genera un documento completo de estudio para la oposición "${oppositionName}".
       Incluye el desarrollo de los siguientes temas: ${selectedThemes?.join(", ") || "Temario general"}.
       Y genera un resumen de las preguntas de los exámenes oficiales de los años: ${selectedYears?.join(", ") || "Últimos años"}.
       Basa TODO en normativa real y vigente en España. NO inventes datos.
