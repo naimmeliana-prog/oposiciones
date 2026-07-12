@@ -49,7 +49,8 @@ async function callOpenRouter(prompt: string, jsonMode = true): Promise<string> 
       "X-Title": "Preparador de Oposiciones",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.0-flash-lite-preview-02-05:free", // Use a free model
+      model: "google/gemini-2.5-flash",
+      max_tokens: 8192,
       messages: [{ role: "user", content: prompt }],
       response_format: jsonMode ? { type: "json_object" } : undefined,
     }),
