@@ -7,6 +7,16 @@ export default defineConfig(({ mode }) => {
   return {
     base: mode === 'production' ? '/' : '/',
     plugins: [react(), tailwindcss()],
+    build: {
+      chunkSizeWarningLimit: 2000,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor: ['react', 'react-dom', 'lucide-react']
+          }
+        }
+      }
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

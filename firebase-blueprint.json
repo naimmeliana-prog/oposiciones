@@ -1,0 +1,39 @@
+{
+  "collections": [
+    {
+      "name": "users",
+      "description": "User profile and statistics",
+      "fields": [
+        { "name": "uid", "type": "string" },
+        { "name": "email", "type": "string" }
+      ],
+      "subcollections": [
+        {
+          "name": "custom_oppositions",
+          "description": "User's customized oppositions",
+          "fields": [
+            { "name": "id", "type": "string" },
+            { "name": "data", "type": "map" }
+          ]
+        },
+        {
+          "name": "official_exams",
+          "description": "User's saved official exams",
+          "fields": [
+            { "name": "id", "type": "string" },
+            { "name": "data", "type": "map" }
+          ]
+        },
+        {
+          "name": "settings",
+          "description": "User's app settings and progress",
+          "fields": [
+            { "name": "activeOppositionId", "type": "string" },
+            { "name": "userStats", "type": "map" },
+            { "name": "deletedOppositions", "type": "array" }
+          ]
+        }
+      ]
+    }
+  ]
+}

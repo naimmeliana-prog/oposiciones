@@ -50,6 +50,10 @@ import { OPPOSITIONS_LIST } from "./data/oppositions";
 import { GENERAL_GUIDELINES, SPECIFIC_GUIDELINES, TRIBUNAL_EXPECTATIONS, STATIC_PRACTICAL_CASES, generateDynamicPracticalCase } from "./data/cases";
 import { getThemeFullContent } from "./data/themeFullContent";
 
+import { auth, db, googleProvider } from "./firebase";
+import { signInWithPopup, onAuthStateChanged, signOut, User as FirebaseUser } from "firebase/auth";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+
 
 const getInteractiveConceptDetail = (themeId: string, item: string, type: 'concept' | 'articles', oppositionId: string) => {
   const isArticles = type === 'articles';
@@ -215,7 +219,74 @@ const createDynamicOpposition = (query: string): Opposition => {
 
 export default function App() {
   // --- STATE ---
+  
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [isFirebaseSyncing, setIsFirebaseSyncing] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setFirebaseUser(user);
+      if (user) {
+        setIsFirebaseSyncing(true);
+        try {
+          const docRef = doc(db, "users", user.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.customOppositions) setCustomOppositions(data.customOppositions);
+            if (data.officialExams) setOfficialExams(data.officialExams);
+            if (data.deletedOppositions) setDeletedOppositions(data.deletedOppositions);
+          }
+        } catch (error) {
+          console.error("Error fetching from Firebase", error);
+        } finally {
+          setIsFirebaseSyncing(false);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleFirebaseLogin = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+      console.error("Firebase Login Error", error);
+      alert("Error al iniciar sesión con Google");
+    }
+  };
+
+  const handleFirebaseLogout = async () => {
+    try {
+      await signOut(auth);
+      // Optional: Clear local data on logout if you want
+    } catch (error) {
+      console.error("Firebase Logout Error", error);
+    }
+  };
+
+  const syncToFirebase = async () => {
+    if (!firebaseUser) return;
+    setIsFirebaseSyncing(true);
+    try {
+      await setDoc(doc(db, "users", firebaseUser.uid), {
+        email: firebaseUser.email,
+        customOppositions,
+        officialExams,
+        deletedOppositions,
+        lastSync: new Date().toISOString()
+      }, { merge: true });
+      alert("Progreso guardado en la nube correctamente.");
+    } catch (error) {
+      console.error("Firebase Sync Error", error);
+      alert("Error al sincronizar con la nube.");
+    } finally {
+      setIsFirebaseSyncing(false);
+    }
+  };
+
   const [users, setUsers] = useState<UserAccount[]>([]);
+
   const [activeUserEmail, setActiveUserEmail] = useState<string>("");
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [registerName, setRegisterName] = useState("");
@@ -2747,31 +2818,39 @@ export default function App() {
 
             {/* Profile widget */}
             <div className="flex items-center gap-2 bg-slate-800 rounded-full pl-3 pr-2 py-1 border border-slate-700">
-              {activeUser ? (
+              {firebaseUser ? (
                 <div className="flex items-center gap-2">
                   <div className="text-left">
                     <p className="text-xs font-bold text-white truncate max-w-[120px]">
-                      {activeUser.fullName}
+                      {firebaseUser.displayName || firebaseUser.email}
                     </p>
                     <p className="text-[10px] text-emerald-400 font-semibold">
-                      Progreso: {progressPercentage}%
+                      Progreso Guardado
                     </p>
                   </div>
                   <button
-                    onClick={() => setShowRegisterModal(true)}
-                    title="Cambiar de perfil o gestionar usuarios"
-                    className="w-8 h-8 rounded-full bg-blue-900 hover:bg-blue-800 flex items-center justify-center text-blue-200 text-xs font-bold cursor-pointer transition border border-blue-700"
+                    onClick={syncToFirebase}
+                    disabled={isFirebaseSyncing}
+                    title="Sincronizar en la nube"
+                    className="w-8 h-8 rounded-full bg-emerald-900 hover:bg-emerald-800 flex items-center justify-center text-emerald-200 text-xs font-bold cursor-pointer transition border border-emerald-700 disabled:opacity-50"
                   >
-                    <Users className="h-4 w-4" />
+                    <Sparkles className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={handleFirebaseLogout}
+                    title="Cerrar Sesión"
+                    className="w-8 h-8 rounded-full bg-red-900 hover:bg-red-800 flex items-center justify-center text-red-200 text-xs font-bold cursor-pointer transition border border-red-700"
+                  >
+                    <User className="h-4 w-4" />
                   </button>
                 </div>
               ) : (
                 <button
-                  onClick={() => setShowRegisterModal(true)}
+                  onClick={handleFirebaseLogin}
                   className="flex items-center gap-1.5 text-xs font-bold text-white hover:text-blue-300 cursor-pointer transition py-1 px-2"
                 >
                   <User className="h-4 w-4" />
-                  <span>Iniciar Sesión / Registrarse</span>
+                  <span>Iniciar con Google</span>
                 </button>
               )}
             </div>

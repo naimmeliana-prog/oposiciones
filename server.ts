@@ -28,6 +28,16 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 
+function getFriendlyErrorMessage(error: any): string {
+  if (!error) return "Error desconocido";
+  const msg = typeof error === 'string' ? error : (error.message || JSON.stringify(error));
+  if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("Quota exceeded") || msg.includes("rate-limits")) {
+    return "Has alcanzado el límite de peticiones. Por favor, espera un minuto y vuelve a intentarlo.";
+  }
+  return msg;
+}
+
+
 dotenv.config();
 
 const ai = new GoogleGenAI({
@@ -97,7 +107,7 @@ app.post("/api/opposition-search", async (req, res) => {
 
   } catch (error: any) {
     console.error("Search API Error:", error.message);
-    res.status(500).json({ error: error.message || "Error al realizar la búsqueda" });
+    res.status(500).json({ error: getFriendlyErrorMessage(error) || "Error al realizar la búsqueda" });
   }
 });
 
@@ -133,7 +143,7 @@ app.post("/api/opposition-sync", async (req, res) => {
 
   } catch (error: any) {
     console.error("Sync API Error:", error.message);
-    res.status(500).json({ error: error.message || "Error al sincronizar la oposición" });
+    res.status(500).json({ error: getFriendlyErrorMessage(error) || "Error al sincronizar la oposición" });
   }
 });
 
@@ -164,7 +174,7 @@ app.post("/api/theme-content", async (req, res) => {
 
   } catch (error: any) {
     console.error("Theme Content Generation Error:", error.message);
-    res.status(500).json({ error: error.message || "Error al generar contenido del tema" });
+    res.status(500).json({ error: getFriendlyErrorMessage(error) || "Error al generar contenido del tema" });
   }
 });
 
@@ -209,7 +219,7 @@ app.post("/api/generate-case", async (req, res) => {
     res.json(JSON.parse(cleanText));
   } catch (error: any) {
     console.error("Case Generation Error:", error.message);
-    res.status(500).json({ error: error.message || "Error al generar el caso práctico" });
+    res.status(500).json({ error: getFriendlyErrorMessage(error) || "Error al generar el caso práctico" });
   }
 });
 
@@ -236,7 +246,7 @@ app.post("/api/generate-material", async (req, res) => {
     res.json(JSON.parse(cleanText));
   } catch (error: any) {
     console.error("Material Generation Error:", error.message);
-    res.status(500).json({ error: error.message || "Error al generar el material completo" });
+    res.status(500).json({ error: getFriendlyErrorMessage(error) || "Error al generar el material completo" });
   }
 });
 
