@@ -50,6 +50,14 @@ function extractJSON(text) {
   if (end === -1 || end < start) return text;
   return text.substring(start, end + 1);
 }
+function getFriendlyErrorMessage(error) {
+  if (!error) return "Error desconocido";
+  const msg = typeof error === "string" ? error : error.message || JSON.stringify(error);
+  if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("Quota exceeded") || msg.includes("rate-limits")) {
+    return "Has alcanzado el l\xEDmite de peticiones. Por favor, espera un minuto y vuelve a intentarlo.";
+  }
+  return msg;
+}
 import_dotenv.default.config();
 var ai = new import_genai.GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -106,7 +114,7 @@ app.post("/api/opposition-search", async (req, res) => {
     }
   } catch (error) {
     console.error("Search API Error:", error.message);
-    res.status(500).json({ error: error.message || "Error al realizar la b\xFAsqueda" });
+    res.status(500).json({ error: getFriendlyErrorMessage(error) || "Error al realizar la b\xFAsqueda" });
   }
 });
 app.post("/api/opposition-sync", async (req, res) => {
@@ -136,7 +144,7 @@ app.post("/api/opposition-sync", async (req, res) => {
     }
   } catch (error) {
     console.error("Sync API Error:", error.message);
-    res.status(500).json({ error: error.message || "Error al sincronizar la oposici\xF3n" });
+    res.status(500).json({ error: getFriendlyErrorMessage(error) || "Error al sincronizar la oposici\xF3n" });
   }
 });
 app.post("/api/theme-content", async (req, res) => {
@@ -163,7 +171,7 @@ app.post("/api/theme-content", async (req, res) => {
     }
   } catch (error) {
     console.error("Theme Content Generation Error:", error.message);
-    res.status(500).json({ error: error.message || "Error al generar contenido del tema" });
+    res.status(500).json({ error: getFriendlyErrorMessage(error) || "Error al generar contenido del tema" });
   }
 });
 app.post("/api/generate-case", async (req, res) => {
@@ -206,7 +214,7 @@ app.post("/api/generate-case", async (req, res) => {
     res.json(JSON.parse(cleanText));
   } catch (error) {
     console.error("Case Generation Error:", error.message);
-    res.status(500).json({ error: error.message || "Error al generar el caso pr\xE1ctico" });
+    res.status(500).json({ error: getFriendlyErrorMessage(error) || "Error al generar el caso pr\xE1ctico" });
   }
 });
 app.post("/api/generate-material", async (req, res) => {
@@ -230,7 +238,7 @@ app.post("/api/generate-material", async (req, res) => {
     res.json(JSON.parse(cleanText));
   } catch (error) {
     console.error("Material Generation Error:", error.message);
-    res.status(500).json({ error: error.message || "Error al generar el material completo" });
+    res.status(500).json({ error: getFriendlyErrorMessage(error) || "Error al generar el material completo" });
   }
 });
 if (process.env.NODE_ENV !== "production") {
