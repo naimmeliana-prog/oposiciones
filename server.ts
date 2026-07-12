@@ -25,7 +25,6 @@ function extractJSON(text) {
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 
 function getFriendlyErrorMessage(error: any): string {
@@ -37,17 +36,31 @@ function getFriendlyErrorMessage(error: any): string {
   return msg;
 }
 
+async function callOpenRouter(prompt: string, jsonMode = true): Promise<string> {
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://ai.studio/build",
+      "X-Title": "Preparador de Oposiciones",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.0-flash-lite-preview-02-05:free", // Use a free model
+      messages: [{ role: "user", content: prompt }],
+      response_format: jsonMode ? { type: "json_object" } : undefined,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenRouter API error: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0].message.content;
+}
 
 dotenv.config();
-
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
-  }
-});
 
 const app = express();
 const PORT = 3000;
@@ -61,21 +74,13 @@ app.post("/api/opposition-search", async (req, res) => {
     const { query } = req.body;
     if (!query) return res.status(400).json({ error: "Query is required" });
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: `Busca exhaustivamente información real, oficial y ACTUALIZADA sobre procesos selectivos, oposiciones o bolsas de empleo público EXCLUSIVAMENTE EN ESPAÑA (Estado, Comunidades Autónomas o Ayuntamientos) para el término: "${query}".
+    const rawText = await callOpenRouter(`Busca exhaustivamente información real, oficial y ACTUALIZADA sobre procesos selectivos, oposiciones o bolsas de empleo público EXCLUSIVAMENTE EN ESPAÑA (Estado, Comunidades Autónomas o Ayuntamientos) para el término: "${query}".
       REGLA ESTRICTA Y OBLIGATORIA: SOLO DEBES DEVOLVER CONVOCATORIAS QUE TENGAN EL PLAZO DE INSCRIPCIÓN ACTUALMENTE ABIERTO. NO DEVUELVAS NINGÚN PROCESO CERRADO, FINALIZADO O PENDIENTE DE ABRIR.
       EXCLUYE cualquier oposición de instituciones europeas (EPSO) o internacionales, a menos que el usuario lo pida expresamente.
       Devuelve una lista de hasta 15 resultados que coincidan con convocatorias reales de empleo público con plazo abierto. NO devuelvas ofertas de empleo privado.
       Incluye detalles como el nombre oficial, plazas, grupo (A1, A2, C1, C2), ámbito y estado. En "status" pon siempre "Abierto" seguido de la fecha límite.
-      Devuelve ESTRICTAMENTE en formato JSON Array sin texto adicional, donde cada objeto tenga estas claves: id, name, totalPlaces (number), group, region, status, description, url.`,
-      config: {
-        tools: [{ googleSearch: {} }],
-        temperature: 0.1
-      }
-    });
+      Devuelve ESTRICTAMENTE en formato JSON Array sin texto adicional, donde cada objeto tenga estas claves: id, name, totalPlaces (number), group, region, status, description, url.`);
     
-    let rawText = response.text || "[]";
     let cleanText = extractJSON(rawText);
 
     try {
@@ -118,20 +123,12 @@ app.post("/api/opposition-sync", async (req, res) => {
     const { name } = req.body;
     if (!name) return res.status(400).json({ error: "Name is required" });
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: `Genera TODO el contenido (Temario, trampas de examen, preguntas difíciles, análisis, casos prácticos) específico, detallado y real para la oposición "${name}".
+    const rawText = await callOpenRouter(`Genera TODO el contenido (Temario, trampas de examen, preguntas difíciles, análisis, casos prácticos) específico, detallado y real para la oposición "${name}".
       IMPORTANTE: Esta oposición es de ESPAÑA. Basa el temario en la Constitución Española, Ley 39/2015, Ley 40/2015, TREBEP, y la normativa autonómica o local aplicable. EXCLUYE el temario de la Unión Europea a menos que la oposición sea explícitamente europea.
       No inventes nombres genéricos. Busca el temario oficial real de esta oposición, cuáles son las leyes y normativas que caen de verdad en ella, cuáles son los requisitos de acceso verdaderos, cuáles son las trampas comunes de ESTA oposición específica y un caso práctico que haya podido caer en exámenes pasados de ESTA oposición.
       IMPORTANTE: Devuelve ESTRICTAMENTE UN OBJETO JSON con las siguientes claves: syllabusBlocks, syllabusThemes, requirements, examTraps, practicalCases, analysisGlobal, difficultPatterns, officialExams.
-      Para "practicalCases", cada caso debe tener "title", "scenario" (descripción larga del supuesto de hecho), y "questions" (array de preguntas). Cada pregunta debe tener "statement", "options" (objeto con A, B, C, D), "correctOption" (A, B, C o D), "explanation" y "articleReference".`,
-      config: {
-        tools: [{ googleSearch: {} }],
-        temperature: 0.2
-      }
-    });
+      Para "practicalCases", cada caso debe tener "title", "scenario" (descripción larga del supuesto de hecho), y "questions" (array de preguntas). Cada pregunta debe tener "statement", "options" (objeto con A, B, C, D), "correctOption" (A, B, C o D), "explanation" y "articleReference".`);
     
-    let rawText = response.text || "{}";
     console.log("Raw content response:", rawText);
     let cleanText = extractJSON(rawText);
     try {
@@ -152,17 +149,10 @@ app.post("/api/theme-content", async (req, res) => {
   try {
     const { themeTitle, oppositionName } = req.body;
     if (!themeTitle || !oppositionName) return res.status(400).json({ error: "Missing parameters" });
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: `Genera el contenido de estudio real, detallado y veraz para el tema "${themeTitle}" correspondiente a la oposición "${oppositionName}". 
+    const rawText = await callOpenRouter(`Genera el contenido de estudio real, detallado y veraz para el tema "${themeTitle}" correspondiente a la oposición "${oppositionName}". 
       No uses texto de relleno. Incluye referencias reales a las leyes o artículos correspondientes.
-      Devuelve ESTRICTAMENTE UN OBJETO JSON con las siguientes claves: id, title, subtitle, introduction, sections (array de objetos con title y content), keyArticles (array de objetos con article, title, description, url) y studyTips.`,
-      config: {
-        tools: [{ googleSearch: {} }]
-      }
-    });
+      Devuelve ESTRICTAMENTE UN OBJETO JSON con las siguientes claves: id, title, subtitle, introduction, sections (array de objetos con title y content), keyArticles (array de objetos con article, title, description, url) y studyTips.`);
     
-    let rawText = response.text || "{}";
     console.log("Raw content response:", rawText);
     let cleanText = extractJSON(rawText);
     try {
@@ -182,9 +172,7 @@ app.post("/api/generate-case", async (req, res) => {
   try {
     const { oppositionName, blockName } = req.body;
     if (!oppositionName) return res.status(400).json({ error: "Opposition name is required" });
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: `Eres un preparador experto de oposiciones y tribunal calificador. Tu tarea es redactar un SUPUESTO PRÁCTICO (Caso Práctico) ALTAMENTE ESPECIALIZADO y REALISTA para la oposición de: "${oppositionName}".
+    const rawText = await callOpenRouter(`Eres un preparador experto de oposiciones y tribunal calificador. Tu tarea es redactar un SUPUESTO PRÁCTICO (Caso Práctico) ALTAMENTE ESPECIALIZADO y REALISTA para la oposición de: "${oppositionName}".
 
       REGLA CRÍTICA DE ROL Y CONTEXTO:
       - Si "${oppositionName}" es del ámbito SANITARIO (ej. Médico, Enfermería, Celador), el escenario DEBE desarrollarse obligatoriamente en un Centro de Salud, Hospital o entorno asistencial. Debe involucrar pacientes, protocolos sanitarios, historias clínicas, traslados de pacientes o triaje clínico. ¡PROHIBIDO mencionar juzgados, letrados, trámites procesales o demandas civiles!
@@ -210,11 +198,8 @@ app.post("/api/generate-case", async (req, res) => {
         ]
       }
       Incluye al menos 3 preguntas tipo test de alta dificultad basadas en el caso.
-      Asegúrate de generar un escenario completamente único y diferente a otros casos (Variación aleatoria: ${Math.random()}).`,
-      config: { temperature: 0.9 }
-    });
+      Asegúrate de generar un escenario completamente único y diferente a otros casos (Variación aleatoria: ${Math.random()}).`);
     
-    let rawText = response.text || "{}";
     let cleanText = extractJSON(rawText);
     res.json(JSON.parse(cleanText));
   } catch (error: any) {
@@ -228,20 +213,12 @@ app.post("/api/generate-material", async (req, res) => {
     const { oppositionName, selectedThemes, selectedYears } = req.body;
     if (!oppositionName) return res.status(400).json({ error: "Missing parameters" });
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: `Genera un documento completo de estudio para la oposición "${oppositionName}".
+    const rawText = await callOpenRouter(`Genera un documento completo de estudio para la oposición "${oppositionName}".
       Incluye el desarrollo completo de los siguientes temas: ${selectedThemes?.join(", ") || "Temario general"}.
       Y genera un resumen exhaustivo de las preguntas y casos de los exámenes oficiales de los años: ${selectedYears?.join(", ") || "Últimos años"}.
       Basa TODO en normativa real y vigente en España. NO inventes datos.
-      Devuelve ESTRICTAMENTE UN OBJETO JSON con las claves: "title", "introduction", "themes" (array con title y content), "exams" (array con year y questions (array con statement, options, correctOption, explanation)).`,
-      config: {
-        tools: [{ googleSearch: {} }],
-        temperature: 0.2
-      }
-    });
+      Devuelve ESTRICTAMENTE UN OBJETO JSON con las claves: "title", "introduction", "themes" (array con title y content), "exams" (array con year y questions (array con statement, options, correctOption, explanation)).`);
     
-    let rawText = response.text || "{}";
     let cleanText = extractJSON(rawText);
     res.json(JSON.parse(cleanText));
   } catch (error: any) {
